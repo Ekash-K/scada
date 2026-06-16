@@ -1,0 +1,83 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Enterprise SCADA - Account Profile Matrix</title>
+    <link rel="stylesheet" href="{% static 'login.css' %}">
+    <style>
+        body { background-color: #000; color: #fff; font-family: 'Courier New', monospace; padding: 20px; }
+        .top-navbar { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #00aaff; padding-bottom: 15px; margin-bottom: 25px; }
+        .navbar-brand { font-size: 24px; font-weight: bold; color: #00aaff; text-shadow: 0 0 10px #00aaff; text-decoration:none; }
+        .screen-toggle-btn { background: transparent; border: 1px solid #00aaff; color: #00aaff; padding: 8px 12px; cursor: pointer; }
+        .screen-toggle-btn:hover { background: #00aaff; color: #000; box-shadow: 0 0 15px #00aaff; }
+        
+        .profile-container { max-width: 650px; margin: 40px auto; border: 1px solid #00aaff; background: rgba(0,10,20,0.8); padding: 30px; box-shadow: 0 0 25px rgba(0,170,255,0.15); }
+        .profile-header { font-size: 20px; color: #00aaff; border-bottom: 1px solid #00aaff; padding-bottom: 8px; margin-bottom: 20px; text-transform: uppercase; }
+        
+        .form-group { margin-bottom: 18px; display: flex; flex-direction: column; gap: 6px; }
+        .form-group label { font-size: 11px; color: #88ccee; text-transform: uppercase; }
+        .form-control-input { background: #000; border: 1px solid #00aaff; padding: 10px; color: #fff; font-family: inherit; }
+        .form-control-input:focus { outline: none; box-shadow: 0 0 10px #00aaff; }
+        .form-control-input[readonly] { border-color: #225588; color: #66aacc; background: rgba(0,0,0,0.5); }
+        
+        .cyber-save-btn { background: transparent; border: 1px solid #00ffaa; color: #00ffaa; padding: 12px 20px; cursor: pointer; font-family: inherit; font-weight: bold; width: 100%; margin-top: 10px; transition: 0.3s; }
+        .cyber-save-btn:hover { background: #00ffaa; color: #000; box-shadow: 0 0 15px #00ffaa; }
+        .alert-messages { padding: 10px; background: rgba(0,255,170,0.1); border: 1px solid #00ffaa; color: #00ffaa; margin-bottom: 20px; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="top-navbar">
+        <a href="{% url 'dashboard' %}" class="navbar-brand">◀ RETURN TO COMMAND CENTER</a>
+        <div>
+            <button class="screen-toggle-btn" onclick="toggleScreenFrame()">[▢] MONITOR MAX/MIN</button>
+        </div>
+    </div>
+
+    <div class="profile-container">
+        <div class="profile-header">🔒 USER TERMINAL PROFILE DATA</div>
+        
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert-messages">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+
+        <form method="POST" action="">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label>SYSTEM SECURITY USERNAME</label>
+                <input type="text" class="form-control-input" value="{{ current_web_user.username }}" readonly>
+            </div>
+
+            <div class="form-group">
+                <label>CORE ACCOUNT REGISTRATION EMAIL</label>
+                <input type="email" class="form-control-input" value="{{ current_web_user.email }}" readonly>
+            </div>
+
+            <div class="form-group">
+                <label>OPERATOR FIRST NAME</label>
+                <input type="text" name="first_name" class="form-control-input" value="{{ current_web_user.first_name }}" placeholder="Enter first name payload...">
+            </div>
+
+            <div class="form-group">
+                <label>OPERATOR LAST NAME</label>
+                <input type="text" name="last_name" class="form-control-input" value="{{ current_web_user.last_name }}" placeholder="Enter last name payload...">
+            </div>
+
+            <button type="submit" class="cyber-save-btn">⚡ RE-WRITE SYSTEM ACCESS PROFILE</button>
+        </form>
+    </div>
+
+    <script>
+        function toggleScreenFrame() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+    </script>
+</body>
+</html>

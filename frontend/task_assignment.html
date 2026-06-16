@@ -1,0 +1,109 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Enterprise SCADA - Task Allocation Desk</title>
+    <link rel="stylesheet" href="{% static 'login.css' %}">
+    <style>
+        body { background-color: #000; color: #fff; font-family: 'Courier New', monospace; padding: 20px; }
+        .top-navbar { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #00aaff; padding-bottom: 15px; margin-bottom: 25px; }
+        .navbar-brand { font-size: 24px; font-weight: bold; color: #00aaff; text-shadow: 0 0 10px #00aaff; text-decoration:none; }
+        .screen-toggle-btn { background: transparent; border: 1px solid #00aaff; color: #00aaff; padding: 8px 12px; cursor: pointer; }
+        .screen-toggle-btn:hover { background: #00aaff; color: #000; box-shadow: 0 0 15px #00aaff; }
+        
+        .assignment-panel { border: 1px solid #00ffaa; background: rgba(0,10,5,0.85); padding: 25px; box-shadow: 0 0 20px rgba(0,255,170,0.1); }
+        .panel-heading { font-size: 20px; color: #00ffaa; font-weight: bold; border-bottom: 1px solid #00ffaa; padding-bottom: 10px; margin-bottom: 20px; }
+        
+        .scada-data-table { w: 100%; width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+        .scada-data-table th { padding: 12px; border-bottom: 2px solid #00ffaa; color: #00ffaa; }
+        .scada-data-table td { padding: 12px; border-bottom: 1px solid #115533; }
+        
+        .select-assignment-box { background: #000; border: 1px solid #00ffaa; color: #fff; padding: 6px; font-family: inherit; width: 100%; }
+        /* Visibility Dropdown Black Text Fix Nitpick */
+        .select-assignment-box option { color: #000000 !important; background-color: #ffffff !important; font-weight: bold; }
+        
+        .update-inline-btn { background: transparent; border: 1px solid #00ffaa; color: #00ffaa; padding: 6px 12px; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: bold; width: 100%; transition: 0.3s; }
+        .update-inline-btn:hover { background: #00ffaa; color: #000; box-shadow: 0 0 12px #00ffaa; }
+        .status-badge { padding: 3px 8px; font-size: 11px; border: 1px solid; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="top-navbar">
+        <a href="{% url 'dashboard' %}" class="navbar-brand">◀ RETURN COMMAND HUB</a>
+        <div>
+            <button class="screen-toggle-btn" onclick="toggleScreenFrame()">[▢] MONITOR MAX/MIN</button>
+        </div>
+    </div>
+
+    <div class="assignment-panel">
+        <div class="panel-heading">🎯 HUMAN CAPITAL O&M DISPATCH ASSIGNMENT REGISTRY</div>
+        
+        <table class="scada-data-table">
+            <thead>
+                <tr>
+                    <th>TASK ID</th>
+                    <th>WORK DESCRIPTION OBJECTIVE</th>
+                    <th>FIELD DOMAIN EXPEDITING ZONE</th>
+                    <th>CURRENT WORK LOG STATUS</th>
+                    <th>DEPLOYED ENGINEER ASSIGNMENT TARGET</th>
+                    <th>TRANSFORM EXECUTION LOGIC</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for task in tasks %}
+                <tr>
+                    <form method="POST" action="{% url 'task_master' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="edit">
+                        <input type="hidden" name="id" value="{{ task.id }}">
+                        <input type="hidden" name="title" value="{{ task.title }}">
+                        <input type="hidden" name="description" value="{{ task.description }}">
+                        <input type="hidden" name="site_id" value="{{ task.site.id|default:'' }}">
+                        <input type="hidden" name="device_id" value="{{ task.device.id|default:'' }}">
+                        <input type="hidden" name="priority" value="{{ task.priority }}">
+                        <input type="hidden" name="due_date" value="{{ task.due_date|date:'Y-m-d' }}">
+
+                        <td>#{{ task.id }}</td>
+                        <td style="color:#00ffaa; font-weight:bold;">{{ task.title }}</td>
+                        <td>{{ task.site.name|default:"Global Master Grid" }}</td>
+                        <td>
+                            <select name="status" class="select-assignment-box" style="border-color: #00aaff;">
+                                <option value="Pending" {% if task.status == 'Pending' %}selected{% endif %}>PENDING ARRIVAL</option>
+                                <option value="In Progress" {% if task.status == 'In Progress' %}selected{% endif %}>IN PROGRESS FAULT FIX</option>
+                                <option value="Completed" {% if task.status == 'Completed' %}selected{% endif %}>COMPLETED RECONCILIATION</option>
+                                <option value="Overdue" {% if task.status == 'Overdue' %}selected{% endif %}>CRITICAL SLA OVERDUE</option>
+                            </select>
+                        </td>
+                        <td>
+                            <select name="assigned_to_id" class="select-assignment-box">
+                                <option value="">-- Standby/Unassigned Pool --</option>
+                                {% for user in users %}
+                                <option value="{{ user.id }}" {% if task.assigned_to.id == user.id %}selected{% endif %}>
+                                    {{ user.name }} [{{ user.category }}]
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td>
+                            <button type="submit" class="update-inline-btn">⚡ SAVE DISPATCH</button>
+                        </td>
+                    </form>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" style="text-align:center; color:#555; padding:25px;">No engineering workflows exist to be dispatched.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        function toggleScreenFrame() {
+            if (!document.fullscreenElement) { document.documentElement.requestFullscreen(); }
+            else { document.exitFullscreen(); }
+        }
+    </script>
+</body>
+</html>
