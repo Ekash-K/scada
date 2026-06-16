@@ -67,6 +67,27 @@
         
         .btn-delete { background: rgba(255, 0, 68, 0.1); color: #ff0044; border: 1px solid #ff0044; padding: 12px; width: 100%; cursor: pointer; display: none; border-radius: 5px; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; margin-top: 10px;}
         .btn-delete:hover { background: rgba(255, 0, 68, 0.2); box-shadow: 0 0 15px rgba(255, 0, 68, 0.6); color: #fff; }
+        .hidden { display: none !important; }
+        .notification-hub { position: relative; display: flex; align-items: center; gap: 15px; }
+        .alert-btn { background: rgba(0, 170, 255, 0.05); border: 1px solid rgba(0, 170, 255, 0.3); color: #00aaff; padding: 10px 20px; border-radius: 30px; cursor: pointer; font-weight: bold; transition: all 0.3s ease; font-size: 1em; display: inline-flex; align-items: center; gap: 10px; font-family: 'Rajdhani', sans-serif; }
+        .alert-btn:hover { background: rgba(0, 170, 255, 0.15); color: #ffffff; box-shadow: 0 0 15px rgba(0, 170, 255, 0.5); }
+        .alert-badge { position: absolute; top: 5px; right: 5px; padding: 4px 8px; font-size: 0.75em; font-weight: bold; color: #ffffff; background: #ff0044; border-radius: 50%; min-width: 20px; text-align: center; }
+        #alert-dropdown { position: absolute; top: calc(100% + 10px); right: 0; width: 320px; max-height: 400px; background: rgba(0, 0, 0, 0.95); border: 1px solid rgba(0, 170, 255, 0.5); border-radius: 10px; box-shadow: 0 0 30px rgba(0, 170, 255, 0.3); z-index: 1000; overflow-y: auto; }
+        #alert-dropdown.hidden { display: none; }
+        .alert-header { padding: 12px 16px; border-bottom: 1px solid rgba(0, 170, 255, 0.5); font-size: 0.85em; color: #00aaff; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+        .alert-list { list-style: none; padding: 0; margin: 0; }
+        .alert-item { padding: 12px 16px; border-bottom: 1px solid rgba(0, 170, 255, 0.2); display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; transition: all 0.3s ease; }
+        .alert-item:hover { background: rgba(0, 170, 255, 0.08); }
+        .alert-item:last-child { border-bottom: none; }
+        .alert-message { flex-grow: 1; font-size: 0.9em; color: #ffffff; }
+        .alert-critical { color: #ff4d4d; font-weight: bold; }
+        .alert-warning { color: #ffcc00; }
+        .alert-timestamp { font-size: 0.8em; color: #556677; margin-top: 4px; }
+        .alert-close { color: #00aaff; text-decoration: none; font-weight: bold; cursor: pointer; transition: all 0.3s ease; }
+        .alert-close:hover { color: #ffffff; text-shadow: 0 0 10px #00aaff; }
+        .alert-empty { padding: 20px 16px; text-align: center; color: #556677; font-size: 0.9em; }
+        .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     </style>
 </head>
 <body>
@@ -94,6 +115,32 @@
             <header class="topbar">
                 <div class="topbar-title">User Master</div>
                 <div class="topbar-actions">
+                <div class="notification-hub">
+                    <button class="alert-btn" onclick="document.getElementById('alert-dropdown').classList.toggle('hidden')">
+                        <i class="fas fa-bell animate-pulse"></i> Alerts
+                        {% if alert_count > 0 %}
+                            <span class="alert-badge">{{ alert_count }}</span>
+                        {% endif %}
+                    </button>
+                    <div id="alert-dropdown" class="hidden">
+                        <div class="alert-header">LIVE TELEMETRY CRITICAL ALERTS</div>
+                        <ul class="alert-list">
+                            {% for alert in live_alerts %}
+                                <li class="alert-item">
+                                    <div style="flex-grow: 1;">
+                                        <p class="alert-message {% if alert.severity == 'Critical' %}alert-critical{% else %}alert-warning{% endif %}">{{ alert.message }}</p>
+                                        <span class="alert-timestamp">{{ alert.created_at|timesince }} ago</span>
+                                    </div>
+                                    <a href="{% url 'clear_alert' alert.id %}" class="alert-close">[✗]</a>
+                                </li>
+                            {% empty %}
+                                <li class="alert-empty">All subsystems operating nominally.</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    <button class="action-btn" onclick="toggleFullScreen()" title="Toggle Fullscreen">
+                        <i class="fas fa-expand"></i>
+                    </button>
                     <a href="{% url 'logout' %}" class="logout-btn-red"><i class="fas fa-power-off"></i> Logout</a>
                 </div>
             </header>
@@ -174,9 +221,14 @@
                 <label>Mobile Number</label>
                 <input type="text" name="mobile" id="userMobile" oninput="this.value = this.value.replace(/[^0-9]/g, '')" required>
                 
-                <label>Assigned Site ID</label>
-                <input type="number" name="site_id" id="userSite" min="1" placeholder="Leave blank if none">
-                
+                <label>Assign to Site</label>
+                <select name="site_id" id="siteId" required>
+                    <option value="" disabled selected>Select Site...</option>
+                    {% for site in sites %}
+                        <option value="{{ site.id }}">{{ site.name }}</option>
+                    {% endfor %}
+                </select>
+
                 <button type="submit" class="btn-save" onclick="document.getElementById('formAction').value = (document.getElementById('formAction').value === 'add') ? 'add' : 'edit'">SAVE CHANGES</button>
                 <button type="submit" class="btn-delete" id="deleteBtn" onclick="document.getElementById('formAction').value='delete'">DELETE USER</button>
                 <button type="button" style="width: 100%; padding: 12px; margin-top: 10px; background: transparent; color: #88ccee; border: 1px solid #88ccee; cursor: pointer; border-radius: 5px; font-weight: bold; transition: 0.3s;" onmouseover="this.style.background='rgba(136, 204, 238, 0.1)'" onmouseout="this.style.background='transparent'" onclick="document.getElementById('actionModal').style.display='none'">CANCEL</button>
@@ -198,7 +250,7 @@
                 document.getElementById('userCategory').value = category;
                 document.getElementById('userEmail').value = email;
                 document.getElementById('userMobile').value = mobile;
-                document.getElementById('userSite').value = site_id !== 'None' ? site_id : '';
+                document.getElementById('siteId').value = site_id;
                 deleteBtn.style.display = 'block';
             } else {
                 document.getElementById('modalTitle').innerText = "Add Personnel";
@@ -206,10 +258,22 @@
                 document.getElementById('userName').value = '';
                 document.getElementById('userEmail').value = '';
                 document.getElementById('userMobile').value = '';
-                document.getElementById('userSite').value = '';
+                document.getElementById('siteId').value = '';
                 deleteBtn.style.display = 'none';
             }
             modal.style.display = 'flex';
+        }
+        
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log(`Error attempting to enable fullscreen: ${err.message}`);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
         }
     </script>
 </body>

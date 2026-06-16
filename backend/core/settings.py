@@ -41,9 +41,8 @@ ROOT_URLCONF = 'core.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        # Fixed pathing: If frontend is outside the backend folder, point directly to it.
-        # Otherwise, relying on APP_DIRS=True works for templates inside your apps.
-        'DIRS': ['D:/scada_om/frontend'], 
+        # Add .parent here to step back out into scada_om/ to find /frontend
+        'DIRS': [BASE_DIR.parent / 'frontend'], 
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -85,7 +84,7 @@ USE_I18N = True
 USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
+    os.path.join(BASE_DIR.parent, 'frontend', 'static'),
 ]
