@@ -1,10 +1,50 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from .models import ScadaUser, ScadaSite, ScadaDevice, ScadaTask, ScadaAlert
+from django.utils import timezone
+from django.http import JsonResponse
+from .models import ScadaUser, ScadaSite, ScadaDevice, WorkOrder, TaskTemplate, ScadaAlert
 from django.db.models import Sum
+from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
+from django.db.models import Q
+from .models import WorkOrder, TaskTemplate
+from .serializers import WorkOrderSerializer, TaskTemplateSerializer
+
+
+class WorkOrderViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for WorkOrder model.
+    Allows: GET (list, retrieve), PUT/PATCH (update), DELETE
+    Filters to only return WorkOrders assigned to active users and devices.
+    """
+    serializer_class = WorkOrderSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        # Only return WorkOrders where assigned user and device are active
+        return WorkOrder.objects.filter(
+            Q(assigned_to__is_active=True) | Q(assigned_to__isnull=True),
+            Q(device__is_active=True) | Q(device__isnull=True)
+        ).filter(is_active=True).select_related('task_template', 'assigned_to', 'device').order_by('-created_at')
+    
+    def perform_create(self, serializer):
+        serializer.save()
+    
+    def perform_update(self, serializer):
+        serializer.save()
+
+
+class TaskTemplateViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for TaskTemplate model.
+    Allows: GET (list, retrieve), POST, PUT/PATCH (update), DELETE
+    """
+    queryset = TaskTemplate.objects.all()
+    serializer_class = TaskTemplateSerializer
+    permission_classes = [IsAuthenticated]
 
 # Helper context mixin for global items (Alerts panel & common attributes)
 def get_global_context(request, extra_context=None):
@@ -77,9 +117,9 @@ def dashboard_view(request):
         'total_devices': total_devices,
         'active_devices': active_devices,
         'offline_devices': ScadaDevice.objects.filter(status__iexact='Offline').count(),
-        'pending_tasks': ScadaTask.objects.filter(status='Pending').count(),
-        'active_tasks': ScadaTask.objects.filter(status='In Progress').count(),
-        'recent_tasks': ScadaTask.objects.select_related('assigned_to', 'site').order_by('-created_at')[:5]
+        'pending_tasks': WorkOrder.objects.filter(status='Pending').count(),
+        'active_tasks': WorkOrder.objects.filter(status='In Progress').count(),
+        'recent_tasks': WorkOrder.objects.select_related('assigned_to', 'device', 'task_template').order_by('-created_at')[:5]
     })
     return render(request, 'dashboard.html', context)
 
@@ -87,10 +127,26 @@ def dashboard_view(request):
 def profile_view(request):
     if request.method == 'POST':
         user = request.user
-        user.first_name = request.POST.get('first_name', '')
-        user.last_name = request.POST.get('last_name', '')
+        current_password = request.POST.get('current_password', '')
+        new_password = request.POST.get('new_password', '')
+        confirm_password = request.POST.get('confirm_password', '')
+
+        if not current_password or not new_password or not confirm_password:
+            messages.error(request, "Please complete all password fields to update your credentials.")
+            return redirect('profile')
+
+        if not user.check_password(current_password):
+            messages.error(request, "Current password is incorrect.")
+            return redirect('profile')
+
+        if new_password != confirm_password:
+            messages.error(request, "New passwords do not match.")
+            return redirect('profile')
+
+        user.set_password(new_password)
         user.save()
-        messages.success(request, "Profile metadata updated successfully.")
+        update_session_auth_hash(request, user)
+        messages.success(request, "Password updated successfully.")
         return redirect('profile')
         
     return render(request, 'profile.html', get_global_context(request))
@@ -102,15 +158,15 @@ def user_master_view(request):
         user_id = request.POST.get('id')
         
         if action == 'delete' and user_id:
-            ScadaUser.objects.filter(id=user_id).delete()
-            messages.error(request, "User database profile dropped.")
+            ScadaUser.objects.filter(id=user_id).update(is_active=False)
+            messages.error(request, "User archived.")
         else:
             name = (request.POST.get('name') or "").title()
             email = request.POST.get('email')
             category = request.POST.get('category')
             mobile = request.POST.get('mobile')
             site_id = request.POST.get('site_id')
-            site_obj = ScadaSite.objects.get(id=site_id) if site_id else None
+            site_obj = ScadaSite.objects.filter(is_active=True).get(id=site_id) if site_id else None
             
             if action == 'add':
                 ScadaUser.objects.create(name=name, email=email, category=category, mobile=mobile, site=site_obj)
@@ -123,13 +179,15 @@ def user_master_view(request):
                 
         return redirect('user_master')
         
-    users = ScadaUser.objects.select_related('site').all()
+    users = ScadaUser.objects.select_related('site').filter(is_active=True)
     context = get_global_context(request, {
         'users': users,
-        'sites': ScadaSite.objects.all(), # Passed to build user insertion select-box dropdown cleanly
+        'sites': ScadaSite.objects.filter(is_active=True), # Passed to build user insertion select-box dropdown cleanly
         'total_users': users.count(),
         'super_admins': users.filter(category='Super Admin').count(),
-        'assigned_users': users.exclude(site__isnull=True).count()
+        'scada_admins': users.filter(category='SCADA Admin').count(),
+        'site_supervisors': users.filter(category='Site Supervisor').count(),
+        'site_engineers': users.filter(category='Site Engineer').count()
     })
     return render(request, 'user_master.html', context)
 
@@ -140,8 +198,8 @@ def site_master_view(request):
         site_id = request.POST.get('id')
         
         if action == 'delete' and site_id:
-            ScadaSite.objects.filter(id=site_id).delete()
-            messages.error(request, "Site dropped permanently.")
+            ScadaSite.objects.filter(id=site_id).update(is_active=False)
+            messages.error(request, "Site archived.")
         else:
             params = {
                 'name': request.POST.get('name'),
@@ -157,7 +215,7 @@ def site_master_view(request):
                 messages.info(request, "Domain parameters modified.")
         return redirect('site_master')
         
-    sites = ScadaSite.objects.all()
+    sites = ScadaSite.objects.filter(is_active=True)
     context = get_global_context(request, {
         'sites': sites,
         'total_sites': sites.count(),
@@ -172,10 +230,10 @@ def device_master_view(request):
         device_id = request.POST.get('id')
         
         if action == 'delete' and device_id:
-            ScadaDevice.objects.filter(id=device_id).delete()
-            messages.error(request, "Device hardware reference dropped.")
+            ScadaDevice.objects.filter(id=device_id).update(is_active=False)
+            messages.error(request, "Device archived.")
         else:
-            site_obj = ScadaSite.objects.get(id=request.POST.get('site_id'))
+            site_obj = ScadaSite.objects.filter(is_active=True).get(id=request.POST.get('site_id'))
             params = {
                 'name': request.POST.get('name'),
                 'category': request.POST.get('category'),
@@ -192,10 +250,10 @@ def device_master_view(request):
                 messages.info(request, "Asset telemetry properties localized.")
         return redirect('device_master')
 
-    devices = ScadaDevice.objects.select_related('site').all()
+    devices = ScadaDevice.objects.select_related('site').filter(is_active=True)
     context = get_global_context(request, {
         'devices': devices,
-        'sites': ScadaSite.objects.all(),
+        'sites': ScadaSite.objects.filter(is_active=True),
         'total_devices': devices.count(),
         'active_devices': devices.filter(status__iexact='Active').count(),
         'offline_devices': devices.filter(status__iexact='Offline').count()
@@ -204,44 +262,129 @@ def device_master_view(request):
 
 @login_required(login_url='login')
 def task_master_view(request):
+    # Handle PATCH requests for delete (archiving via hard delete)
+    if request.method == 'PATCH':
+        import json
+        try:
+            data = json.loads(request.body)
+            action = data.get('action')
+            task_id = data.get('id')
+            
+            if action == 'archive' and task_id:
+                # Soft-delete: mark work order inactive
+                updated = WorkOrder.objects.filter(id=task_id).update(is_active=False)
+                if updated:
+                    return JsonResponse({'success': True, 'message': 'Task archived successfully'})
+                return JsonResponse({'success': False, 'message': 'Task not found'}, status=404)
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': str(e)}, status=500)
+    
     if request.method == 'POST':
         action = request.POST.get('action')
         task_id = request.POST.get('id')
         
-        if action == 'delete' and task_id:
-            ScadaTask.objects.filter(id=task_id).delete()
-            messages.error(request, "Task registration revoked.")
-        else:
-            user_id = request.POST.get('assigned_to_id')
-            site_id = request.POST.get('site_id')
-            device_id = request.POST.get('device_id')
+        try:
+            if action == 'delete' and task_id:
+                # Soft-delete via is_active flag
+                WorkOrder.objects.filter(id=task_id).update(is_active=False)
+                messages.error(request, "Task archived.")
+            else:
+                if action == 'add':
+                    title = (request.POST.get('title') or '').strip()
+                    description = (request.POST.get('description') or '').strip()
+                    due_date = request.POST.get('due_date') or None
+                    frequency = request.POST.get('frequency') or 'One-Time'
+                    if title:
+                        tt = TaskTemplate.objects.create(title=title, description=description)
+                        WorkOrder.objects.create(task_template=tt, status='Pending', due_date=due_date, frequency=frequency)
+                        messages.success(request, "Work order created.")
+                    else:
+                        messages.error(request, "Task title is required.")
+                elif action == 'edit' and task_id:
+                    title = (request.POST.get('title') or '').strip()
+                    description = (request.POST.get('description') or '').strip()
+                    due_date = request.POST.get('due_date') or None
+                    frequency = request.POST.get('frequency') or 'One-Time'
+                    task_order = WorkOrder.objects.filter(id=task_id).first()
+                    if task_order and task_order.task_template:
+                        task_order.task_template.title = title or task_order.task_template.title
+                        task_order.task_template.description = description or task_order.task_template.description
+                        task_order.task_template.save()
+                        task_order.due_date = due_date
+                        task_order.frequency = frequency
+                        task_order.save()
+                        messages.info(request, "Work order updated.")
+                    else:
+                        messages.error(request, "Unable to update task template.")
+                    
+        except Exception as e:
+            messages.error(request, f"Database Integrity Error: {str(e)}")
             
-            params = {
-                'title': request.POST.get('title'),
-                'description': request.POST.get('description'),
-                'priority': request.POST.get('priority', 'Medium'),
-                'status': request.POST.get('status', 'Pending'),
-                'assigned_to': ScadaUser.objects.get(id=user_id) if user_id else None,
-                'site': ScadaSite.objects.get(id=site_id) if site_id else None,
-                'device': ScadaDevice.objects.get(id=device_id) if device_id else None,
-                'due_date': request.POST.get('due_date') or None
-            }
-            
-            if action == 'add':
-                ScadaTask.objects.create(**params)
-                messages.success(request, "Field engineering order spawned.")
-            elif action == 'edit' and task_id:
-                ScadaTask.objects.filter(id=task_id).update(**params)
-                messages.info(request, "Field engineering parameters adjusted.")
         return redirect('task_master')
         
+    tasks = WorkOrder.objects.select_related('assigned_to', 'device', 'task_template').filter(is_active=True)
+    today = timezone.localdate()
+    overdue_by_due_date = tasks.filter(status__in=['Pending', 'In Progress']).filter(due_date__lt=today).count()
     context = get_global_context(request, {
-        'tasks': ScadaTask.objects.select_related('assigned_to', 'site', 'device').all(),
-        'users': ScadaUser.objects.all(),
-        'sites': ScadaSite.objects.all(),
-        'devices': ScadaDevice.objects.all()
+        'tasks': tasks,
+        'task_templates': TaskTemplate.objects.all(),
+        'users': ScadaUser.objects.filter(is_active=True),
+        'sites': ScadaSite.objects.filter(is_active=True),
+        'devices': ScadaDevice.objects.filter(is_active=True),
+        'total_tasks': tasks.count(),
+        'pending_tasks': tasks.filter(status='Pending').count(),
+        'resolved_tasks': tasks.filter(status='Resolved').count(),
+        'overdue_tasks': overdue_by_due_date
     })
     return render(request, 'task_master.html', context)
+
+@login_required(login_url='login')
+def task_assignment_view(request):
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        task_id = request.POST.get('id')
+        
+        try:
+            if action == 'delete' and task_id:
+                WorkOrder.objects.filter(id=task_id).update(is_active=False)
+                messages.error(request, "Task archived.")
+            else:
+                if action == 'edit' and task_id:
+                    assigned_to_id = request.POST.get('user_id') or None
+                    device_id = request.POST.get('device_id') or None
+
+                    params = {
+                        'assigned_to_id': assigned_to_id,
+                        'device_id': device_id
+                    }
+
+                    # If the work order is being assigned to a user or device,
+                    # automatically set its status to 'In Progress'. Do not allow
+                    # client-side status changes from the form.
+                    if assigned_to_id or device_id:
+                        params['status'] = 'In Progress'
+
+                    WorkOrder.objects.filter(id=task_id).update(**params)
+                    messages.info(request, "Work order assignment updated.")
+                    
+        except Exception as e:
+            messages.error(request, f"Database Integrity Error: {str(e)}")
+            
+        return redirect('task_assignment')
+        
+    all_tasks = WorkOrder.objects.select_related('assigned_to', 'device', 'task_template').filter(is_active=True)
+    tasks = all_tasks
+    context = get_global_context(request, {
+        'tasks': tasks,
+        'users': ScadaUser.objects.filter(is_active=True),
+        'sites': ScadaSite.objects.filter(is_active=True),
+        'devices': ScadaDevice.objects.filter(is_active=True),
+        'total_tasks': all_tasks.count(),
+        'pending_tasks': all_tasks.filter(status='Pending').count(),
+        'resolved_tasks': all_tasks.filter(status='Resolved').count(),
+        'overdue_tasks': all_tasks.filter(status__in=['Pending', 'In Progress'], due_date__lt=timezone.localdate()).count()
+    })
+    return render(request, 'task_assignment.html', context)
 
 @login_required(login_url='login')
 def clear_alert_view(request, alert_id):

@@ -13,7 +13,7 @@ SECRET_KEY = 'django-insecure-n+(@$ux-85v&8p0oteas$h5qmwok$3g!cnj2+7_^k0ykk#7t6c
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['testserver', '127.0.0.1', 'localhost']
 
 # Application definition
 INSTALLED_APPS = [
@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
     'authentication', # <-- Your SCADA app!
 ]
 

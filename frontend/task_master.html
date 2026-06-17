@@ -19,14 +19,37 @@
         }
 
         /* Dashboard Statistics Bar */
-        .stats-container { display: flex; gap: 20px; margin-bottom: 25px; clear: both; }
+        .stats-container { display: flex; gap: 20px; margin-bottom: 25px; clear: both; flex-wrap: wrap; }
         .stat-card {
-            flex: 1; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px);
+            flex: 1; min-width: 180px; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px);
             border: 1px solid rgba(0, 170, 255, 0.3); padding: 20px; border-radius: 10px;
             text-align: center; box-shadow: inset 0 0 15px rgba(0, 170, 255, 0.05);
         }
         .stat-card h3 { color: #00aaff; font-size: 2.5em; margin: 0; text-shadow: 0 0 15px rgba(0, 170, 255, 0.6); }
         .stat-card p { color: #88ccee; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; margin: 5px 0 0 0; font-size: 0.9em; }
+        .filter-panel, .search-wrapper {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+            margin-bottom: 20px; padding: 15px 18px; background: rgba(0, 0, 0, 0.45);
+            border: 1px solid rgba(0, 170, 255, 0.2); border-radius: 12px;
+        }
+        .filter-panel label, .search-wrapper label {
+            color: #88ccee; text-transform: uppercase; letter-spacing: 1px; font-size: 0.9em;
+            margin-right: 10px;
+        }
+        .filter-chip {
+            border: 1px solid rgba(0, 170, 255, 0.4); background: rgba(0, 0, 0, 0.4);
+            color: #ffffff; padding: 10px 16px; border-radius: 999px; cursor: pointer;
+            transition: all 0.2s ease; font-weight: 700; min-width: 120px; text-align: center;
+        }
+        .filter-chip:hover, .filter-chip.active {
+            background: rgba(0, 170, 255, 0.3); border-color: #00aaff; color: #fff;
+        }
+        .search-input {
+            flex: 1; min-width: 220px; padding: 12px 14px; border-radius: 999px;
+            border: 1px solid rgba(0, 170, 255, 0.4); background: rgba(0, 0, 0, 0.35); color: #fff;
+            outline: none; transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .search-input:focus { border-color: #00ff80; box-shadow: 0 0 15px rgba(0, 255, 128, 0.2); }
 
         /* Cyber-Table Styles with Blue Glow */
         .table-wrapper {
@@ -132,6 +155,8 @@
                 <a href="{% url 'site_master' %}" class="nav-item"><i class="fas fa-building"></i> Site Master</a>
                 <a href="{% url 'device_master' %}" class="nav-item"><i class="fas fa-microchip"></i> Device Master</a>
                 <a href="{% url 'task_master' %}" class="nav-item active"><i class="fas fa-tasks"></i> Task Master</a>
+                <a href="{% url 'task_assignment' %}" class="nav-item"><i class="fas fa-user-check"></i> Task Assignment</a>
+                <a href="{% url 'profile' %}" class="nav-item"><i class="fas fa-user-cog"></i> Profile</a>
             </nav>
         </aside>
 
@@ -177,36 +202,56 @@
                         <p>Total Tasks</p>
                     </div>
                     <div class="stat-card">
-                        <h3 style="color: #ffcc00;">{{ pending_tasks | default:"0" }}</h3>
+                        <h3 style="color: #ffcc00;">{{ pending_tasks|default:"0" }}</h3>
                         <p>Pending Tasks</p>
                     </div>
+                    <div class="stat-card">
+                        <h3 style="color: #00ff80;">{{ completed_tasks|default:"0" }}</h3>
+                        <p>Completed Tasks</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3 style="color: #ff4d4d;">{{ overdue_tasks|default:"0" }}</h3>
+                        <p>Overdue Tasks</p>
+                    </div>
                 </div>
-                
+
+                <div class="filter-panel">
+                    <label>Show:</label>
+                    <button type="button" class="filter-chip active" data-status="All" onclick="applyTaskFilter('All')">All</button>
+                    <button type="button" class="filter-chip" data-status="Pending" onclick="applyTaskFilter('Pending')">Pending</button>
+                    <button type="button" class="filter-chip" data-status="Resolved" onclick="applyTaskFilter('Resolved')">Completed</button>
+                    <button type="button" class="filter-chip" data-status="Overdue" onclick="applyTaskFilter('Overdue')">Overdue</button>
+                </div>
+
+                <div class="search-wrapper">
+                    <label>Search:</label>
+                    <input type="search" class="search-input" placeholder="Search tasks by title or description..." oninput="searchTasks(this.value)">
+                </div>
+
                 <div class="table-wrapper">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>ID</th><th>Title</th><th>Site</th><th>Device</th><th>Priority</th><th>Due Date</th><th>Status</th><th>Action</th>
+                                <th>ID</th><th>Title</th><th>Description</th><th>Due Date</th><th>Frequency</th><th>Status</th><th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for task in tasks %}
-                            <tr>
+                            <tr data-id="{{ task.id }}" data-status="{{ task.status|default:'Draft' }}">
                                 <td>#{{ task.id }}</td>
-                                <td style="color: #00aaff; font-weight: bold;">{{ task.title }}</td>
-                                <td>{{ task.site.name|default:"N/A" }}</td>
-                                <td>{{ task.device.name|default:"N/A" }}</td>
-                                <td><span style="color: {% if task.priority == 'Critical' or task.priority == 'High' %}#ff3333{% else %}#ffcc00{% endif %};">{{ task.priority }}</span></td>
+                                <td style="color: #00aaff; font-weight: bold;">{{ task.task_template.title|default:"No Template" }}</td>
+                                <td>{{ task.task_template.description|truncatechars:40|default:"" }}</td>
                                 <td>{{ task.due_date|default:"No Date" }}</td>
-                                <td>{{ task.status|default:"Pending" }}</td>
+                                <td>{{ task.frequency|default:'One-Time' }}</td>
+                                <td><span style="color: {% if task.status == 'Pending' %}#ffcc00{% elif task.status == 'Resolved' %}#00ff80{% elif task.status == 'Review Required' %}#ff4d4d{% else %}#00aaff{% endif %}; font-weight:bold;">{{ task.status|default:"Draft" }}</span></td>
                                 <td>
-                                    <button class="edit-btn" onclick="openModal('edit', '{{ task.id }}', '{{ task.title|escapejs }}', '{{ task.description|escapejs }}', '{{ task.site.id }}', '{{ task.device.id }}', '{{ task.priority }}', '{{ task.due_date|date:'Y-m-d'|default:'' }}', '{{ task.status|default:'Pending' }}')" type="button">EDIT</button>
+                                    <button class="edit-btn" onclick="openModal('edit', '{{ task.id }}', '{{ task.task_template.title|escapejs }}', '{{ task.task_template.description|escapejs }}', '{{ task.due_date|date:'Y-m-d'|default:'' }}', '{{ task.frequency|default:'One-Time' }}')" type="button">EDIT</button>
                                     <button class="delete-btn" type="button" onclick="confirmDelete({{ task.id }}, 'task')"><i class="fas fa-trash-alt"></i></button>
                                 </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="8" style="text-align:center; color:#555; padding:20px;">No tasks registered.</td>
+                                <td colspan="6" style="text-align:center; color:#555; padding:20px;">No tasks registered.</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -218,62 +263,49 @@
 
     <div class="modal" id="actionModal">
         <div class="modal-content">
-            <h3 id="modalTitle" style="margin-bottom: 25px; color:#00aaff; text-align: center; font-size: 1.8em; text-transform: uppercase; letter-spacing: 2px;">Manage Task</h3>
-            <form method="POST">
-                {% csrf_token %}
-                <input type="hidden" name="action" id="formAction">
-                <input type="hidden" name="id" id="taskId">
-                
-                <label>Task Title</label>
-                <input type="text" name="title" id="taskTitle" required>
-                
-                <label>Description</label>
-                <textarea name="description" id="taskDescription" rows="3" style="resize: vertical;"></textarea>
-                
-                <label>Site</label>
-                <select name="site_id" id="taskSite">
-                    <option value="">-- Select Site --</option>
-                    {% for site in sites %}
-                    <option value="{{ site.id }}">{{ site.name }}</option>
-                    {% endfor %}
-                </select>
-                
-                <label>Device</label>
-                <select name="device_id" id="taskDevice">
-                    <option value="">-- Select Device --</option>
-                    {% for device in devices %}
-                    <option value="{{ device.id }}">{{ device.name }} [{{ device.category }}]</option>
-                    {% endfor %}
-                </select>
-                
-                <label>Priority</label>
-                <select name="priority" id="taskPriority">
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                    <option value="Critical">Critical</option>
-                </select>
-                
-                <label>Due Date</label>
-                <input type="date" name="due_date" id="taskDueDate">
-                
-                <label>Status</label>
-                <select name="status" id="taskStatus">
-                    <option value="Pending">Pending</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Completed">Completed</option>
-                    <option value="Overdue">Overdue</option>
-                </select>
-                
-                <button type="submit" class="btn-save" onclick="document.getElementById('formAction').value = (document.getElementById('formAction').value === 'add') ? 'add' : 'edit'">SAVE CHANGES</button>
-                <button type="submit" class="btn-delete" id="deleteBtn" onclick="document.getElementById('formAction').value='delete'">DELETE TASK</button>
-                <button type="button" class="cancel-btn" onclick="document.getElementById('actionModal').style.display='none'">CANCEL</button>
-            </form>
+            <h3 id="modalTitle" style="margin-bottom: 25px; color:#00aaff; text-align: center; font-size: 1.8em; text-transform: uppercase; letter-spacing: 2px;">Manage Tasks</h3>
+                <form method="POST" id="taskForm">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" id="formAction">
+                    <input type="hidden" name="id" id="taskId">
+                    <input type="hidden" name="task_template_id" id="taskTemplateId">
+                    
+                    <label>Task Title</label>
+                    <input type="text" id="taskTitle" name="title" style="opacity: 0.95; color: #00aaff; background: rgba(0,0,0,0.05); border: 1px solid rgba(0,170,255,0.3); border-radius: 5px; padding: 12px; margin-bottom: 12px; width: 100%;">
+                    <label>Description</label>
+                    <textarea id="taskDescription" name="description" rows="4" style="width:100%; padding:12px; margin-bottom:20px; background: rgba(0,0,0,0.05); border:1px solid rgba(0,170,255,0.3); color:#fff; border-radius:5px;"></textarea>
+                    <label>Due Date</label>
+                    <input type="date" id="taskDueDate" name="due_date" style="opacity: 0.95; color: #00aaff; background: rgba(0,0,0,0.05); border: 1px solid rgba(0,170,255,0.3); border-radius: 5px; padding: 12px; margin-bottom: 12px; width: 100%;">
+                    <label>Frequency</label>
+                    <select id="taskFrequency" name="frequency" style="opacity: 0.95; color: #00aaff; background: rgba(0,0,0,0.05); border: 1px solid rgba(0,170,255,0.3); border-radius: 5px; padding: 12px; margin-bottom: 20px; width: 100%;">
+                        <option value="One-Time">One-Time</option>
+                        <option value="Daily">Daily</option>
+                        <option value="Weekly">Weekly</option>
+                        <option value="Monthly">Monthly</option>
+                    </select>
+                    <button type="submit" class="btn-save">SAVE CHANGES</button>
+                    <button type="submit" class="btn-delete" id="deleteBtn" onclick="document.getElementById('formAction').value='delete'">DELETE TASK</button>
+                    <button type="button" class="cancel-btn" onclick="document.getElementById('actionModal').style.display='none'">CANCEL</button>
+                </form>
         </div>
     </div>
 
     <script>
-        function openModal(mode, id='', title='', description='', siteId='', deviceId='', priority='', dueDate='', status='') {
+        // Ensure the modal form always submits with a valid `action` value
+        (function(){
+            const form = document.getElementById('taskForm');
+            if (form) {
+                form.addEventListener('submit', function(e){
+                    const actionInput = document.getElementById('formAction');
+                    const idInput = document.getElementById('taskId');
+                    // If action wasn't set by openModal (edge cases), derive it now
+                    if (!actionInput.value) {
+                        actionInput.value = idInput.value ? 'edit' : 'add';
+                    }
+                });
+            }
+        })();
+        function openModal(mode, id='', title='', description='', dueDate='', frequency='') {
             const modal = document.getElementById('actionModal');
             const deleteBtn = document.getElementById('deleteBtn');
             
@@ -283,57 +315,100 @@
                 document.getElementById('modalTitle').innerText = "Edit Task";
                 document.getElementById('taskId').value = id;
                 document.getElementById('taskTitle').value = title;
-                document.getElementById('taskDescription').value = description;
-                document.getElementById('taskSite').value = siteId === 'None' || siteId === '' ? '' : siteId;
-                document.getElementById('taskDevice').value = deviceId === 'None' || deviceId === '' ? '' : deviceId;
-                document.getElementById('taskPriority').value = priority;
-                document.getElementById('taskDueDate').value = dueDate;
-                document.getElementById('taskStatus').value = status || 'Pending';
+                document.getElementById('taskDescription').value = description || '';
+                document.getElementById('taskDueDate').value = dueDate || '';
+                document.getElementById('taskFrequency').value = frequency || 'One-Time';
                 deleteBtn.style.display = 'block';
             } else {
-                document.getElementById('modalTitle').innerText = "Add Task";
+                document.getElementById('modalTitle').innerText = "Add New Task";
                 document.getElementById('taskId').value = '';
                 document.getElementById('taskTitle').value = '';
                 document.getElementById('taskDescription').value = '';
-                document.getElementById('taskSite').value = '';
-                document.getElementById('taskDevice').value = '';
-                document.getElementById('taskPriority').value = 'Medium';
                 document.getElementById('taskDueDate').value = '';
-                document.getElementById('taskStatus').value = 'Pending';
+                document.getElementById('taskFrequency').value = 'One-Time';
                 deleteBtn.style.display = 'none';
             }
             modal.style.display = 'flex';
         }
         
+        let currentTaskFilter = 'All';
+        let currentTaskSearch = '';
+
+        function applyTaskFilter(status) {
+            currentTaskFilter = status;
+            const rows = document.querySelectorAll('.data-table tbody tr');
+            const chips = document.querySelectorAll('.filter-chip');
+
+            chips.forEach(chip => {
+                chip.classList.toggle('active', chip.dataset.status === status);
+            });
+
+            rows.forEach(row => {
+                const rowStatus = row.dataset.status || 'Pending';
+                const title = row.children[1]?.textContent.toLowerCase() || '';
+                const description = row.children[2]?.textContent.toLowerCase() || '';
+                const matchesSearch = currentTaskSearch === '' || title.includes(currentTaskSearch) || description.includes(currentTaskSearch);
+                const matchesStatus = status === 'All' || rowStatus === status;
+                row.style.display = matchesSearch && matchesStatus ? '' : 'none';
+            });
+        }
+
+        function searchTasks(query) {
+            currentTaskSearch = query.trim().toLowerCase();
+            const rows = document.querySelectorAll('.data-table tbody tr');
+            rows.forEach(row => {
+                const rowStatus = row.dataset.status || 'Pending';
+                const title = row.children[1]?.textContent.toLowerCase() || '';
+                const description = row.children[2]?.textContent.toLowerCase() || '';
+                const matchesSearch = currentTaskSearch === '' || title.includes(currentTaskSearch) || description.includes(currentTaskSearch);
+                const matchesStatus = currentTaskFilter === 'All' || rowStatus === currentTaskFilter;
+                row.style.display = matchesSearch && matchesStatus ? '' : 'none';
+            });
+        }
+
         function confirmDelete(recordId, recordType) {
-            if (confirm(`Are you sure you want to delete this ${recordType}? This action cannot be undone.`)) {
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.style.display = 'none';
+            if (confirm(`Are you sure you want to archive this ${recordType}? This can be undone by reactivating it.`)) {
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
                 
-                const actionInput = document.createElement('input');
-                actionInput.type = 'hidden';
-                actionInput.name = 'action';
-                actionInput.value = 'delete';
-                
-                const idInput = document.createElement('input');
-                idInput.type = 'hidden';
-                idInput.name = 'id';
-                idInput.value = recordId;
-                
-                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
-                if (csrfToken) {
-                    const csrfInput = document.createElement('input');
-                    csrfInput.type = 'hidden';
-                    csrfInput.name = 'csrfmiddlewaretoken';
-                    csrfInput.value = csrfToken.value;
-                    form.appendChild(csrfInput);
-                }
-                
-                form.appendChild(actionInput);
-                form.appendChild(idInput);
-                document.body.appendChild(form);
-                form.submit();
+                fetch(`/task-master/`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({
+                        action: 'archive',
+                        id: recordId
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        // Remove row from table with fade effect
+                        const row = document.querySelector(`tr[data-id="${recordId}"]`);
+                        if (row) {
+                            row.style.opacity = '0';
+                            row.style.transition = 'opacity 0.3s ease';
+                            setTimeout(() => {
+                                row.remove();
+                            }, 300);
+                        }
+                        alert(`${recordType} archived successfully.`);
+                        // Reload the page to refresh counts
+                        setTimeout(() => location.reload(), 500);
+                    } else {
+                        alert(`Error: ${data.message || 'Failed to archive ' + recordType}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while archiving the ' + recordType + '. Please try again.');
+                });
             }
         }
         
