@@ -1,0 +1,57 @@
+Mobile login API is broken
+
+MobileLoginAPI.post() authenticates using username=email, but login flow stores email as a Django User field and maps it to internal username.
+It returns user.role, but Django User has no role attribute. This will raise AttributeError.
+Inconsistent user model design
+
+
+
+Django User is used for auth.
+ScadaUser is used for domain user data.
+That split is confusing and risks inconsistent state, especially since signup only creates a Django User, not a ScadaUser.
+
+
+Settings security issues
+SECRET_KEY is hardcoded in settings.py.
+DEBUG = True is enabled.
+These are fine for local dev, but should be secured before deployment.
+
+
+Validation / error handling gaps
+Many view handlers assume valid IDs and POST data, e.g. site = ScadaSite.objects.filter(is_active=True).get(id=site_id).
+Invalid/missing IDs can raise exceptions rather than returning user-friendly errors.
+
+
+Password reset is placeholder
+forgot_password_view just returns an info message without any actual reset flow.
+
+
+Test coverage is missing
+tests.py is empty.
+There is a smoke_test.py, but no real Django test suite.
+
+
+Potential model mismatch
+Several models are marked managed = False, while TaskTemplate and WorkOrder are managed.
+If the DB schema is pre-existing, that may be intentional, but it requires careful migration management.
+
+
+
+
+
+
+Fix MobileLoginAPI to:
+map email to Django username like login_view does, or authenticate by email using a custom backend
+avoid user.role unless that field exists
+Consider a single auth model:
+either use a custom Django AbstractUser / AbstractBaseUser
+or add a OneToOneField from ScadaUser to Django User
+Move sensitive config into env vars:
+SECRET_KEY, DEBUG, and other secrets should come from .env
+Improve view robustness:
+validate foreign keys
+handle missing or invalid POST values gracefully
+avoid repeated logic in task_master_view for archive/delete
+Add unit tests under tests.py
+Implement real password reset flow if needed
+

@@ -202,25 +202,9 @@
                         <p>Total Tasks</p>
                     </div>
                     <div class="stat-card">
-                        <h3 style="color: #ffcc00;">{{ pending_tasks|default:"0" }}</h3>
-                        <p>Pending Tasks</p>
-                    </div>
-                    <div class="stat-card">
-                        <h3 style="color: #00ff80;">{{ completed_tasks|default:"0" }}</h3>
-                        <p>Completed Tasks</p>
-                    </div>
-                    <div class="stat-card">
                         <h3 style="color: #ff4d4d;">{{ overdue_tasks|default:"0" }}</h3>
                         <p>Overdue Tasks</p>
                     </div>
-                </div>
-
-                <div class="filter-panel">
-                    <label>Show:</label>
-                    <button type="button" class="filter-chip active" data-status="All" onclick="applyTaskFilter('All')">All</button>
-                    <button type="button" class="filter-chip" data-status="Pending" onclick="applyTaskFilter('Pending')">Pending</button>
-                    <button type="button" class="filter-chip" data-status="Resolved" onclick="applyTaskFilter('Resolved')">Completed</button>
-                    <button type="button" class="filter-chip" data-status="Overdue" onclick="applyTaskFilter('Overdue')">Overdue</button>
                 </div>
 
                 <div class="search-wrapper">
@@ -232,18 +216,17 @@
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>ID</th><th>Title</th><th>Description</th><th>Due Date</th><th>Frequency</th><th>Status</th><th>Action</th>
+                                <th>ID</th><th>Title</th><th>Description</th><th>Due Date</th><th>Frequency</th><th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for task in tasks %}
-                            <tr data-id="{{ task.id }}" data-status="{{ task.status|default:'Draft' }}">
+                            <tr data-id="{{ task.id }}">
                                 <td>#{{ task.id }}</td>
                                 <td style="color: #00aaff; font-weight: bold;">{{ task.task_template.title|default:"No Template" }}</td>
                                 <td>{{ task.task_template.description|truncatechars:40|default:"" }}</td>
                                 <td>{{ task.due_date|default:"No Date" }}</td>
                                 <td>{{ task.frequency|default:'One-Time' }}</td>
-                                <td><span style="color: {% if task.status == 'Pending' %}#ffcc00{% elif task.status == 'Resolved' %}#00ff80{% elif task.status == 'Review Required' %}#ff4d4d{% else %}#00aaff{% endif %}; font-weight:bold;">{{ task.status|default:"Draft" }}</span></td>
                                 <td>
                                     <button class="edit-btn" onclick="openModal('edit', '{{ task.id }}', '{{ task.task_template.title|escapejs }}', '{{ task.task_template.description|escapejs }}', '{{ task.due_date|date:'Y-m-d'|default:'' }}', '{{ task.frequency|default:'One-Time' }}')" type="button">EDIT</button>
                                     <button class="delete-btn" type="button" onclick="confirmDelete({{ task.id }}, 'task')"><i class="fas fa-trash-alt"></i></button>
@@ -331,38 +314,16 @@
             modal.style.display = 'flex';
         }
         
-        let currentTaskFilter = 'All';
         let currentTaskSearch = '';
-
-        function applyTaskFilter(status) {
-            currentTaskFilter = status;
-            const rows = document.querySelectorAll('.data-table tbody tr');
-            const chips = document.querySelectorAll('.filter-chip');
-
-            chips.forEach(chip => {
-                chip.classList.toggle('active', chip.dataset.status === status);
-            });
-
-            rows.forEach(row => {
-                const rowStatus = row.dataset.status || 'Pending';
-                const title = row.children[1]?.textContent.toLowerCase() || '';
-                const description = row.children[2]?.textContent.toLowerCase() || '';
-                const matchesSearch = currentTaskSearch === '' || title.includes(currentTaskSearch) || description.includes(currentTaskSearch);
-                const matchesStatus = status === 'All' || rowStatus === status;
-                row.style.display = matchesSearch && matchesStatus ? '' : 'none';
-            });
-        }
 
         function searchTasks(query) {
             currentTaskSearch = query.trim().toLowerCase();
             const rows = document.querySelectorAll('.data-table tbody tr');
             rows.forEach(row => {
-                const rowStatus = row.dataset.status || 'Pending';
                 const title = row.children[1]?.textContent.toLowerCase() || '';
                 const description = row.children[2]?.textContent.toLowerCase() || '';
                 const matchesSearch = currentTaskSearch === '' || title.includes(currentTaskSearch) || description.includes(currentTaskSearch);
-                const matchesStatus = currentTaskFilter === 'All' || rowStatus === currentTaskFilter;
-                row.style.display = matchesSearch && matchesStatus ? '' : 'none';
+                row.style.display = matchesSearch ? '' : 'none';
             });
         }
 

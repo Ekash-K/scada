@@ -201,8 +201,8 @@
                         <p>Pending Tasks</p>
                     </div>
                     <div class="stat-card">
-                        <h3 style="color: #00ff80;">{{ resolved_tasks|default:"0" }}</h3>
-                        <p>Resolved Tasks</p>
+                        <h3 style="color: #00ff80;">{{ completed_tasks|default:"0" }}</h3>
+                        <p>Completed Tasks</p>
                     </div>
                     <div class="stat-card">
                         <h3 style="color: #ff4d4d;">{{ overdue_tasks|default:"0" }}</h3>
@@ -240,7 +240,7 @@
                                 <td>{% if task.device %}{{ task.device.name }}{% else %}Unassigned{% endif %}</td>
                                 <td>{% if task.due_date %}{{ task.due_date }}{% else %}No Date{% endif %}</td>
                                 <td>{% if task.frequency %}{{ task.frequency }}{% else %}One-Time{% endif %}</td>
-                                <td><span style="color: {% if task.status == 'Pending' %}#ffcc00{% elif task.status == 'Resolved' %}#00ff80{% elif task.status == 'In Progress' %}#00aaff{% else %}#888888{% endif %}; font-weight:bold;">{{ task.status|default:"Draft" }}</span></td>
+                                <td><span style="color: {% if task.status == 'Pending' %}#ffcc00{% elif task.status == 'Completed' %}#00ff80{% elif task.status == 'In Progress' %}#00aaff{% else %}#888888{% endif %}; font-weight:bold;">{{ task.status|default:"Draft" }}</span></td>
                                 <td>
                                         <button class="edit-btn" onclick="openModal('edit', '{{ task.id }}', '{{ task.task_template.title|escapejs }}', '{% if task.assigned_to.site %}{{ task.assigned_to.site.id }}{% elif task.device.site %}{{ task.device.site.id }}{% else %}{% endif %}', '{{ task.assigned_to.id|default:'' }}', '{{ task.device.id|default:'' }}', '{{ task.status|default:'Draft' }}')" type="button">ASSIGN</button>
                                 </td>

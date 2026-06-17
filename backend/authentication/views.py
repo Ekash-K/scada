@@ -303,7 +303,7 @@ def task_master_view(request):
                     frequency = request.POST.get('frequency') or 'One-Time'
                     if title:
                         tt = TaskTemplate.objects.create(title=title, description=description)
-                        WorkOrder.objects.create(task_template=tt, status='Pending', due_date=due_date, frequency=frequency)
+                        WorkOrder.objects.create(task_template=tt, due_date=due_date, frequency=frequency)
                         messages.success(request, "Work order created.")
                     else:
                         messages.error(request, "Task title is required.")
@@ -331,7 +331,7 @@ def task_master_view(request):
         
     tasks = WorkOrder.objects.select_related('assigned_to', 'device', 'task_template').filter(is_active=True)
     today = timezone.localdate()
-    overdue_by_due_date = tasks.filter(status__in=['Pending', 'In Progress']).filter(due_date__lt=today).count()
+    overdue_by_due_date = tasks.filter(due_date__lt=today).count()
     context = get_global_context(request, {
         'tasks': tasks,
         'task_templates': TaskTemplate.objects.all(),
@@ -339,8 +339,6 @@ def task_master_view(request):
         'sites': ScadaSite.objects.filter(is_active=True),
         'devices': ScadaDevice.objects.filter(is_active=True),
         'total_tasks': tasks.count(),
-        'pending_tasks': tasks.filter(status='Pending').count(),
-        'resolved_tasks': tasks.filter(status='Resolved').count(),
         'overdue_tasks': overdue_by_due_date
     })
     return render(request, 'task_master.html', context)
