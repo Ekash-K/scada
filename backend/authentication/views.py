@@ -1,17 +1,24 @@
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
-from django.contrib.auth.models import User
+# Django Core Imports
 from django.contrib import messages
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
-from django.utils import timezone
+from django.contrib.auth.models import User
+from django.db.models import Q, Sum
 from django.http import JsonResponse
-from .models import ScadaUser, ScadaSite, ScadaDevice, WorkOrder, TaskTemplate, ScadaAlert
-from django.db.models import Sum
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+
+# Django REST Framework (Third-Party) Imports
 from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticated
-from django.db.models import Q
-from .models import WorkOrder, TaskTemplate
-from .serializers import WorkOrderSerializer, TaskTemplateSerializer
+from rest_framework.authtoken.models import Token
+from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+# Local App Imports
+from .models import ScadaAlert, ScadaDevice, ScadaSite, ScadaUser, TaskTemplate, WorkOrder
+from .serializers import TaskTemplateSerializer, WorkOrderSerializer
 
 
 class WorkOrderViewSet(viewsets.ModelViewSet):
@@ -390,3 +397,25 @@ def task_assignment_view(request):
 def clear_alert_view(request, alert_id):
     ScadaAlert.objects.filter(id=alert_id).update(is_read=True)
     return redirect(request.META.get('HTTP_REFERER', 'dashboard'))
+
+class MobileLoginAPI(APIView):
+    permission_classes = [AllowAny] # Let anyone try to log in
+
+    def post(self, request):
+        email = request.data.get('email')
+        password = request.data.get('password')
+        
+        # Authenticate the engineer
+        user = authenticate(request, username=email, password=password)
+        
+        if user is not None and user.is_active:
+            # Create or retrieve the mobile token
+            token, created = Token.objects.get_or_create(user=user)
+            return Response({
+                'token': token.key,
+                'user_id': user.id,
+                'name': user.name, # Or whatever your name field is
+                'role': user.role
+            })
+        else:
+            return Response({'error': 'Invalid credentials or inactive account'}, status=400)
