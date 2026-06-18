@@ -402,18 +402,29 @@ class MobileLoginAPI(APIView):
     def post(self, request):
         email = request.data.get('email')
         password = request.data.get('password')
-        
-        # Authenticate the engineer
-        user = authenticate(request, username=email, password=password)
-        
+
+        # Some deployments use the Django User model with username==email.
+        # The web login path looks up the internal username by email before
+        # calling authenticate — replicate that here so mobile logins work
+        # even when username != email.
+        internal_username = None
+        try:
+            user_record = User.objects.get(email=email)
+            internal_username = user_record.username
+        except User.DoesNotExist:
+            internal_username = None
+
+        # Authenticate using the resolved internal username
+        user = authenticate(request, username=internal_username, password=password)
+
         if user is not None and user.is_active:
             # Create or retrieve the mobile token
             token, created = Token.objects.get_or_create(user=user)
             return Response({
                 'token': token.key,
                 'user_id': user.id,
-                'name': user.name, # Or whatever your name field is
-                'role': user.role
+                'name': getattr(user, 'first_name', '') or getattr(user, 'username', ''),
+                'role': getattr(user, 'role', None)
             })
         else:
             return Response({'error': 'Invalid credentials or inactive account'}, status=400)
